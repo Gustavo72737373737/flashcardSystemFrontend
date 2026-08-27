@@ -1,0 +1,89 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Folder, LoaderCircle, Pencil, Trash2, Wifi, X } from 'lucide-react'
+import './App.css'
+
+type Materia = { id: number; nome: string }
+type Tema = { id: number; nome: string; materiaId: number }
+type Flashcard = { id: number; titulo: string; frente: string; verso: string; materiaId: number; temaId: number }
+type Screen = 'materias' | 'temas' | 'tema' | 'setup' | 'arena' | 'victory'
+type Modal = 'materia' | 'tema' | 'card' | null
+
+const demoMaterias: Materia[] = [{ id: 1, nome: 'Desenvolvimento Web' }, { id: 2, nome: 'Design de Produto' }]
+const demoTemas: Tema[] = [{ id: 1, nome: 'React', materiaId: 1 }, { id: 2, nome: 'JavaScript', materiaId: 1 }, { id: 3, nome: 'Fundamentos', materiaId: 2 }]
+const demoCards: Flashcard[] = [{ id: 1, titulo: 'Hooks essenciais', frente: 'Para que serve o useEffect?', verso: 'Sincronizar um componente com sistemas externos, reagindo às dependências.', materiaId: 1, temaId: 1 }, { id: 2, titulo: 'Estado local', frente: 'Quando usar useState?', verso: 'Para guardar dados locais que alteram a renderização do componente.', materiaId: 1, temaId: 1 }]
+const API = import.meta.env.VITE_API_URL || 'https://flashcardsystem-production.up.railway.app'
+
+function App() {
+  const [materias, setMaterias] = useState<Materia[]>(demoMaterias)
+  const [temas, setTemas] = useState<Tema[]>(demoTemas)
+  const [cards, setCards] = useState<Flashcard[]>(demoCards)
+  const [screen, setScreen] = useState<Screen>('materias')
+  const [materia, setMateria] = useState<Materia | null>(null)
+  const [tema, setTema] = useState<Tema | null>(null)
+  const [modal, setModal] = useState<Modal>(null)
+  const [editing, setEditing] = useState<Flashcard | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [apiOffline, setApiOffline] = useState(false)
+  const [shuffle, setShuffle] = useState(true)
+  const [reverse, setReverse] = useState(false)
+  const [round, setRound] = useState(1)
+  const [deck, setDeck] = useState<Flashcard[]>([])
+  const [arenaIndex, setArenaIndex] = useState(0)
+  const [revealed, setRevealed] = useState(false)
+  const [roundWrong, setRoundWrong] = useState<Flashcard[]>([])
+  const [rounds, setRounds] = useState(1)
+
+  const temaCards = useMemo(() => cards.filter(card => card.temaId === tema?.id), [cards, tema])
+  const currentCard = deck[arenaIndex]
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const responses = await Promise.all(['/api/materias', '/api/temas', '/api/flashcards'].map(path => fetch(`${API}${path}`)))
+        if (responses.some(response => !response.ok)) throw new Error('api')
+        const data = await Promise.all(responses.map(response => response.json()))
+        if (data[0].length) setMaterias(data[0]); if (data[1].length) setTemas(data[1]); if (data[2].length) setCards(data[2])
+      } catch { setApiOffline(true) } finally { setLoading(false) }
+    }
+    load()
+  }, [])
+
+  const openMateria = (item: Materia) => { setMateria(item); setScreen('temas') }
+  const openTema = (item: Tema) => { setTema(item); setScreen('tema') }
+  const back = () => { if (screen === 'temas') { setMateria(null); setScreen('materias') } else if (screen === 'tema') { setTema(null); setScreen('temas') } else { setScreen('tema') } }
+  const startSetup = () => setScreen('setup')
+  const beginArena = async () => { let next = [...temaCards]; try { const response = await fetch(`${API}/api/flashcards/estudo?materiaId=${materia?.id}&temaId=${tema?.id}`); if (response.ok) { const studyCards = await response.json(); if (studyCards.length) next = studyCards } } catch { setApiOffline(true) } if (shuffle) next.sort(() => Math.random() - .5); setDeck(next); setArenaIndex(0); setRound(1); setRounds(1); setRoundWrong([]); setRevealed(false); setScreen('arena') }
+  const answer = (correct: boolean) => { if (!currentCard) return; const nextWrong = correct ? roundWrong : [...roundWrong, currentCard]; if (arenaIndex < deck.length - 1) { setRoundWrong(nextWrong); setArenaIndex(index => index + 1); setRevealed(false); return } if (nextWrong.length) { setDeck(nextWrong); setRoundWrong([]); setArenaIndex(0); setRound(value => value + 1); setRounds(value => value + 1); setRevealed(false) } else setScreen('victory') }
+
+  const save = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setSaving(true); const form = new FormData(event.currentTarget); const name = String(form.get('nome') || '').trim()
+    try {
+      if (modal === 'materia') { const response = await fetch(`${API}/api/materias`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name }) }); const data = response.ok ? await response.json() : { id: Date.now(), nome: name }; setMaterias(previous => [...previous, data]) }
+      if (modal === 'tema' && materia) { const response = await fetch(`${API}/api/temas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name, materiaId: materia.id }) }); const data = response.ok ? await response.json() : { id: Date.now(), nome: name, materiaId: materia.id }; setTemas(previous => [...previous, data]) }
+      if (modal === 'card' && tema) { const payload = { titulo: String(form.get('titulo') || '') || 'Sem Título', frente: String(form.get('frente') || ''), verso: String(form.get('verso') || ''), materiaId: materia?.id, temaId: tema.id }; const response = await fetch(`${API}/api/flashcards${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = response.ok ? await response.json() : { ...payload, id: editing?.id || Date.now() }; setCards(previous => editing ? previous.map(item => item.id === editing.id ? data : item) : [...previous, data]) }
+      setModal(null)
+    } catch { setApiOffline(true) } finally { setSaving(false) }
+  }
+  const removeCard = async (card: Flashcard) => { if (!confirm('Excluir este flashcard?')) return; try { await fetch(`${API}/api/flashcards/${card.id}`, { method: 'DELETE' }) } catch { setApiOffline(true) } setCards(previous => previous.filter(item => item.id !== card.id)) }
+
+  if (loading) return <div className="loading-screen"><span className="rune">𐦉</span><LoaderCircle className="spin" /> CARREGANDO SISTEMA...</div>
+  if (screen === 'arena' && currentCard) return <Arena card={currentCard} index={arenaIndex} total={deck.length} round={round} reverse={reverse} revealed={revealed} onReveal={() => setRevealed(true)} onAnswer={answer} onBack={back} />
+  if (screen === 'victory') return <Victory rounds={rounds} onAgain={beginArena} onBack={() => setScreen('tema')} />
+
+  return <div className="tui-app"><header className="top-header"><button className="brand" onClick={() => { setMateria(null); setTema(null); setScreen('materias') }}><span className="rune">𐦉</span><span><strong>FLASHCARD_RPG</strong><small>CENTRAL DE ESTUDOS</small></span></button><div className={apiOffline ? 'connection offline' : 'connection'}><Wifi size={14} /> {apiOffline ? 'BACKEND OFFLINE' : 'BACKEND ONLINE'}</div></header><main className="content"><div className="status-line"><span>SYS:// {screen.toUpperCase()}</span><span>{materias.length} MATÉRIAS // {cards.length} CARDS</span></div>{apiOffline && <div className="alert"><X size={15} /> API INDISPONÍVEL. EXIBINDO DADOS LOCAIS.</div>}{screen === 'materias' && <Home materias={materias} onOpen={openMateria} onNew={() => setModal('materia')} />}{screen === 'temas' && materia && <Temas materia={materia} temas={temas.filter(item => item.materiaId === materia.id)} onBack={back} onOpen={openTema} onNew={() => setModal('tema')} />}{screen === 'tema' && tema && <TemaPanel materia={materia!} tema={tema} cards={temaCards} onBack={back} onSetup={startSetup} onNew={() => { setEditing(null); setModal('card') }} onEdit={card => { setEditing(card); setModal('card') }} onDelete={removeCard} />}{screen === 'setup' && <Setup count={temaCards.length} shuffle={shuffle} reverse={reverse} setShuffle={setShuffle} setReverse={setReverse} onBack={back} onStart={beginArena} />}</main>{modal && <CreateModal type={modal} editing={editing} saving={saving} onClose={() => setModal(null)} onSave={save} />}</div>
+}
+
+function Home({ materias, onOpen, onNew }: { materias: Materia[]; onOpen: (item: Materia) => void; onNew: () => void }) { return <section><SectionTitle title="SELEÇÃO DE MATÉRIAS" subtitle="PASTAS DISPONÍVEIS NO INVENTÁRIO" /><div className="folder-grid">{materias.map(item => <button className="folder-card" key={item.id} onClick={() => onOpen(item)}><Folder size={43} /><strong>{item.nome.toUpperCase()}</strong><small>MATÉRIA // ABRIR PASTA</small><ChevronRight /></button>)}</div>{materias.length === 0 && <Empty text="NENHUMA MATÉRIA CADASTRADA" action="CRIAR PRIMEIRA PASTA" onClick={onNew} />}<button className="rune-button yellow" onClick={onNew}>𐦉 NOVA MATÉRIA</button></section> }
+function Temas({ materia, temas, onBack, onOpen, onNew }: { materia: Materia; temas: Tema[]; onBack: () => void; onOpen: (item: Tema) => void; onNew: () => void }) { return <section><Breadcrumb back={onBack} items={['MATÉRIAS', materia.nome.toUpperCase()]} /><SectionTitle title={materia.nome.toUpperCase()} subtitle="SUBPASTAS DE TEMAS" /><div className="folder-grid">{temas.map(item => <button className="folder-card" key={item.id} onClick={() => onOpen(item)}><Folder size={43} /><strong>{item.nome.toUpperCase()}</strong><small>TEMA // ABRIR SUBPASTA</small><ChevronRight /></button>)}</div>{temas.length === 0 && <Empty text="NENHUM TEMA NESTA MATÉRIA" action="CRIAR PRIMEIRO TEMA" onClick={onNew} />}<button className="rune-button yellow" onClick={onNew}>𐦉 NOVO TEMA</button></section> }
+function TemaPanel({ materia, tema, cards, onBack, onSetup, onNew, onEdit, onDelete }: { materia: Materia; tema: Tema; cards: Flashcard[]; onBack: () => void; onSetup: () => void; onNew: () => void; onEdit: (card: Flashcard) => void; onDelete: (card: Flashcard) => void }) { return <section><Breadcrumb back={onBack} items={['MATÉRIAS', materia.nome.toUpperCase(), tema.nome.toUpperCase()]} /><div className="theme-heading"><div><SectionTitle title={tema.nome.toUpperCase()} subtitle={`${materia.nome.toUpperCase()} // ${cards.length} FLASHCARDS`} /></div><button className="rune-button cyan" onClick={onSetup}>INICIAR ESTUDOS <ChevronRight size={17} /></button></div><div className="card-table"><div className="table-head"><span>ID</span><span>TÍTULO DO ARQUIVO</span><span>AÇÕES</span></div>{cards.map(card => <div className="card-row" key={card.id}><span className="id">#{String(card.id).padStart(3, '0')}</span><strong>{card.titulo}</strong><div className="row-actions"><button aria-label="Editar" onClick={() => onEdit(card)}><Pencil size={15} /></button><button className="danger" aria-label="Excluir" onClick={() => onDelete(card)}><Trash2 size={15} /></button></div></div>)}</div>{cards.length === 0 && <Empty text="NENHUM CARD NESTE TEMA" action="ADICIONAR PRIMEIRO CARD" onClick={onNew} />}<button className="rune-button green" onClick={onNew}>𐦉 ADICIONAR NOVO CARD</button></section> }
+function Setup({ count, shuffle, reverse, setShuffle, setReverse, onBack, onStart }: { count: number; shuffle: boolean; reverse: boolean; setShuffle: (value: boolean) => void; setReverse: (value: boolean) => void; onBack: () => void; onStart: () => void }) { return <section className="setup"><Breadcrumb back={onBack} items={['CONFIGURAÇÃO DOS ESTUDOS']} /><SectionTitle title="PREPARAR ARENA" subtitle="CONFIGURE SUA SESSÃO DE RECUPERAÇÃO" /><div className="setup-panel"><div className="setup-row"><div><strong>EMBARALHAR CARDS</strong><small>ALTERNAR A ORDEM A CADA SESSÃO</small></div><Toggle value={shuffle} onChange={setShuffle} /></div><div className="setup-row"><div><strong>MODO REVERSO</strong><small>ESCOLHA QUAL LADO APARECE PRIMEIRO</small></div><div className="segmented"><button className={!reverse ? 'active' : ''} onClick={() => setReverse(false)}>FRENTE → VERSO</button><button className={reverse ? 'active' : ''} onClick={() => setReverse(true)}>VERSO → FRENTE</button></div></div></div><div className="arena-start"><span>{count} CARDS NA SESSÃO</span><button className="rune-button yellow huge" disabled={!count} onClick={onStart}>𐦉 INICIAR ARENA</button></div></section> }
+function Arena({ card, index, total, round, reverse, revealed, onReveal, onAnswer, onBack }: { card: Flashcard; index: number; total: number; round: number; reverse: boolean; revealed: boolean; onReveal: () => void; onAnswer: (correct: boolean) => void; onBack: () => void }) { const question = reverse ? card.verso : card.frente; const answer = reverse ? card.frente : card.verso; return <div className="arena"><div className="arena-top"><button className="back-button" onClick={onBack}><ChevronLeft size={17} /> SAIR DA ARENA</button><span>RODADA {round} // CARD {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}</span></div><div className="progress"><span style={{ width: `${((index + 1) / total) * 100}%` }} /></div><div className="study-card"><small>LADO EXIBIDO // {reverse ? 'VERSO' : 'FRENTE'}</small><h2>{revealed ? answer : question}</h2><strong>{card.titulo}</strong>{!revealed ? <button className="rune-button yellow huge" onClick={onReveal}>REVELAR RESPOSTA <ChevronRight size={18} /></button> : <div className="answer-actions"><button className="rune-button red huge" onClick={() => onAnswer(false)}>ERREI</button><button className="rune-button green huge" onClick={() => onAnswer(true)}><Check size={17} /> ACERTEI</button></div>}</div></div> }
+function Victory({ rounds, onAgain, onBack }: { rounds: number; onAgain: () => void; onBack: () => void }) { return <div className="victory"><span className="victory-rune">𐦉</span><p className="green-text">ESTUDOS CONCLUÍDOS</p><h1>100% DE APROVEITAMENTO</h1><span>RODADAS REALIZADAS: {rounds}</span><div><button className="rune-button yellow" onClick={onAgain}>ESTUDAR NOVAMENTE</button><button className="rune-button cyan" onClick={onBack}>VOLTAR AO TEMA</button></div></div> }
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) { return <div className="section-title"><h2>{title}</h2><p>{subtitle}</p></div> }
+function Breadcrumb({ back, items }: { back: () => void; items: string[] }) { return <div className="breadcrumb"><button onClick={back}><ChevronLeft size={15} /> VOLTAR</button>{items.map(item => <span key={item}>/ {item}</span>)}</div> }
+function Toggle({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) { return <button className={value ? 'toggle on' : 'toggle'} onClick={() => onChange(!value)}>{value ? 'LIGADO' : 'DESLIGADO'}</button> }
+function Empty({ text, action, onClick }: { text: string; action: string; onClick: () => void }) { return <div className="empty"><Folder size={30} /><strong>{text}</strong><button onClick={onClick}>{action}</button></div> }
+function CreateModal({ type, editing, saving, onClose, onSave }: { type: Modal; editing: Flashcard | null; saving: boolean; onClose: () => void; onSave: (event: React.FormEvent<HTMLFormElement>) => void }) { return <div className="modal-backdrop"><form className="modal" onSubmit={onSave}><button type="button" className="close" onClick={onClose}><X size={17} /></button><span className="modal-kicker">𐦉 CREATE_COMMAND</span><h2>{type === 'materia' ? 'NOVA MATÉRIA' : type === 'tema' ? 'NOVO TEMA' : editing ? 'EDITAR CARD' : 'NOVO FLASHCARD'}</h2>{type === 'card' ? <><label>TÍTULO<input name="titulo" defaultValue={editing?.titulo} placeholder="Sem Título" /></label><label>FRENTE<textarea name="frente" required defaultValue={editing?.frente} /></label><label>VERSO<textarea name="verso" required defaultValue={editing?.verso} /></label></> : <label>NOME<input name="nome" required autoFocus placeholder={type === 'materia' ? 'Ex: História' : 'Ex: Brasil Colônia'} /></label>}<div className="modal-actions"><button type="button" className="rune-button" onClick={onClose}>CANCELAR</button><button className="rune-button green" disabled={saving}>{saving ? <LoaderCircle className="spin" size={15} /> : 'SALVAR'}</button></div></form></div> }
+
+export default App
