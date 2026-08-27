@@ -4,7 +4,7 @@ Frontend da central de estudos em React + TypeScript + Vite. A interface usa a r
 
 ## 1. Antes de começar
 
-Instale Node.js LTS em https://nodejs.org/. Abra o terminal na pasta do projeto e rode:
+Instale Node.js LTS 22 ou superior em https://nodejs.org/. O projeto usa Node 22 porque o Vite atual depende de recursos que não existem no Node 18. Abra o terminal na pasta do projeto e rode:
 
 ```bash
 npm install
@@ -19,6 +19,10 @@ npm run preview
 ```
 
 O comando `build` verifica o TypeScript e cria a pasta `dist`.
+
+### Erro `styleText` no Railway
+
+Se o log mostrar `Node.js v18` e `node:util does not provide an export named styleText`, o serviço está usando uma versão antiga do Node. O projeto já contém `engines` no `package.json` e `.nvmrc` com Node 22. Faça commit e push desses arquivos e use `Redeploy` no Railway para executar um novo build.
 
 ## 2. Mapa da pasta
 
