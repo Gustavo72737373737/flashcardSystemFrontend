@@ -163,13 +163,16 @@ Se no futuro forem adicionadas rotas do navegador, como `/tema/1`, será necess�
 
 O projeto já contém `railway.json` e o script `npm start` configurado para escutar a porta `$PORT` do Railway.
 
+O Railway usa o `Dockerfile` da raiz, baseado em `node:22-alpine`. Isso evita que o Nixpacks selecione Node 18 por engano.
+
 1. Envie o projeto para um repositório GitHub. O arquivo `.env.local` não é enviado porque está no `.gitignore`.
 2. Em https://railway.app/, crie um novo projeto e escolha `Deploy from GitHub repo`.
-3. Selecione este repositório. O Railway detectará Node.js e usará:
+3. Selecione este repositório. O Railway detectará o `Dockerfile` e usará Node 22:
 
 ```text
-Build command: npm run build
-Start command: npm start
+Image: node:22-alpine
+Build: npm run build (dentro do Dockerfile)
+Start: npm start (dentro do Dockerfile)
 ```
 
 4. No serviço do frontend, abra `Variables` e adicione:
@@ -182,7 +185,7 @@ VITE_API_URL=https://flashcardsystem-production.up.railway.app
 6. Aguarde o deploy e abra o domínio gerado.
 7. No backend, configure CORS permitindo o domínio público do frontend.
 
-Importante: variáveis `VITE_*` são incorporadas durante o build. Sempre que alterar `VITE_API_URL` no Railway, faça um novo deploy para gerar os arquivos do frontend novamente.
+Importante: variáveis `VITE_*` são incorporadas durante o build. Sempre que alterar `VITE_API_URL` no Railway, faça um novo deploy para gerar os arquivos do frontend novamente. Se a tela do Railway ainda mostrar `Nixpacks` ou `nodejs_18`, confirme que o serviço está ligado ao commit mais recente e faça um novo deploy; o log deve começar pelo build do Dockerfile, não por `setup | nodejs_18`.
 
 ## 9. Publicar manualmente
 
