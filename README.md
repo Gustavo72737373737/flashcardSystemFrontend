@@ -117,7 +117,7 @@ Exemplos de corpos enviados:
 }
 ```
 
-O carregamento inicial faz três requisições GET em paralelo. Se o backend falhar, a tela mostra um alerta e usa dados demonstrativos. Dados criados com a API desligada não serão persistidos no banco.
+O carregamento inicial faz três requisições GET em paralelo. Se o backend falhar, a tela mostra um alerta e os estados vazios, sem inventar matérias, temas ou flashcards. Os dados só aparecem depois de serem retornados ou criados pela API.
 
 ### CORS
 

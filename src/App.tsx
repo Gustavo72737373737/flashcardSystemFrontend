@@ -8,15 +8,12 @@ type Flashcard = { id: number; titulo: string; frente: string; verso: string; ma
 type Screen = 'materias' | 'temas' | 'tema' | 'setup' | 'arena' | 'victory'
 type Modal = 'materia' | 'tema' | 'card' | null
 
-const demoMaterias: Materia[] = [{ id: 1, nome: 'Desenvolvimento Web' }, { id: 2, nome: 'Design de Produto' }]
-const demoTemas: Tema[] = [{ id: 1, nome: 'React', materiaId: 1 }, { id: 2, nome: 'JavaScript', materiaId: 1 }, { id: 3, nome: 'Fundamentos', materiaId: 2 }]
-const demoCards: Flashcard[] = [{ id: 1, titulo: 'Hooks essenciais', frente: 'Para que serve o useEffect?', verso: 'Sincronizar um componente com sistemas externos, reagindo às dependências.', materiaId: 1, temaId: 1 }, { id: 2, titulo: 'Estado local', frente: 'Quando usar useState?', verso: 'Para guardar dados locais que alteram a renderização do componente.', materiaId: 1, temaId: 1 }]
 const API = import.meta.env.VITE_API_URL || 'https://flashcardsystem-production.up.railway.app'
 
 function App() {
-  const [materias, setMaterias] = useState<Materia[]>(demoMaterias)
-  const [temas, setTemas] = useState<Tema[]>(demoTemas)
-  const [cards, setCards] = useState<Flashcard[]>(demoCards)
+  const [materias, setMaterias] = useState<Materia[]>([])
+  const [temas, setTemas] = useState<Tema[]>([])
+  const [cards, setCards] = useState<Flashcard[]>([])
   const [screen, setScreen] = useState<Screen>('materias')
   const [materia, setMateria] = useState<Materia | null>(null)
   const [tema, setTema] = useState<Tema | null>(null)
@@ -61,9 +58,9 @@ function App() {
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setSaving(true); const form = new FormData(event.currentTarget); const name = String(form.get('nome') || '').trim()
     try {
-      if (modal === 'materia') { const response = await fetch(`${API}/api/materias${editingMateria ? `/${editingMateria.id}` : ''}`, { method: editingMateria ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name }) }); const data = response.ok ? await response.json() : { id: editingMateria?.id || Date.now(), nome: name }; setMaterias(previous => editingMateria ? previous.map(item => item.id === editingMateria.id ? data : item) : [...previous, data]) }
-      if (modal === 'tema' && materia) { const response = await fetch(`${API}/api/temas${editingTema ? `/${editingTema.id}` : ''}`, { method: editingTema ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name, materiaId: materia.id }) }); const data = response.ok ? await response.json() : { id: editingTema?.id || Date.now(), nome: name, materiaId: materia.id }; setTemas(previous => editingTema ? previous.map(item => item.id === editingTema.id ? data : item) : [...previous, data]) }
-      if (modal === 'card' && tema) { const payload = { titulo: String(form.get('titulo') || '') || 'Sem Título', frente: String(form.get('frente') || ''), verso: String(form.get('verso') || ''), materiaId: materia?.id, temaId: tema.id }; const response = await fetch(`${API}/api/flashcards${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = response.ok ? await response.json() : { ...payload, id: editing?.id || Date.now() }; setCards(previous => editing ? previous.map(item => item.id === editing.id ? data : item) : [...previous, data]) }
+      if (modal === 'materia') { const response = await fetch(`${API}/api/materias${editingMateria ? `/${editingMateria.id}` : ''}`, { method: editingMateria ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name }) }); if (!response.ok) throw new Error('save materia'); const data = await response.json(); setMaterias(previous => editingMateria ? previous.map(item => item.id === editingMateria.id ? data : item) : [...previous, data]) }
+      if (modal === 'tema' && materia) { const response = await fetch(`${API}/api/temas${editingTema ? `/${editingTema.id}` : ''}`, { method: editingTema ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name, materiaId: materia.id }) }); if (!response.ok) throw new Error('save tema'); const data = await response.json(); setTemas(previous => editingTema ? previous.map(item => item.id === editingTema.id ? data : item) : [...previous, data]) }
+      if (modal === 'card' && tema) { const payload = { titulo: String(form.get('titulo') || '') || 'Sem Título', frente: String(form.get('frente') || ''), verso: String(form.get('verso') || ''), materiaId: materia?.id, temaId: tema.id }; const response = await fetch(`${API}/api/flashcards${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!response.ok) throw new Error('save card'); const data = await response.json(); setCards(previous => editing ? previous.map(item => item.id === editing.id ? data : item) : [...previous, data]) }
       setModal(null)
     } catch { setApiOffline(true) } finally { setSaving(false) }
   }
